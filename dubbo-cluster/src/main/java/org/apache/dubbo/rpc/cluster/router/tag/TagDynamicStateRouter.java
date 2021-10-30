@@ -16,12 +16,6 @@
  */
 package org.apache.dubbo.rpc.cluster.router.tag;
 
-import java.net.UnknownHostException;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-
 import org.apache.dubbo.common.URL;
 import org.apache.dubbo.common.config.configcenter.ConfigChangeType;
 import org.apache.dubbo.common.config.configcenter.ConfigChangedEvent;
@@ -41,6 +35,11 @@ import org.apache.dubbo.rpc.cluster.router.state.BitList;
 import org.apache.dubbo.rpc.cluster.router.state.RouterCache;
 import org.apache.dubbo.rpc.cluster.router.tag.model.TagRouterRule;
 import org.apache.dubbo.rpc.cluster.router.tag.model.TagRuleParser;
+
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 import static org.apache.dubbo.common.constants.CommonConstants.ANYHOST_VALUE;
 import static org.apache.dubbo.common.constants.CommonConstants.TAG_KEY;
@@ -84,16 +83,11 @@ public class TagDynamicStateRouter extends AbstractStateRouter implements Config
     }
 
     @Override
-    public URL getUrl() {
-        return url;
-    }
-
-    @Override
     public <T> BitList<Invoker<T>> route(BitList<Invoker<T>> invokers, RouterCache<T> cache, URL url,
-        Invocation invocation) throws RpcException {
+                                         Invocation invocation) throws RpcException {
 
 
-        final TagRouterRule tagRouterRuleCopy = (TagRouterRule)cache.getAddrMetadata();
+        final TagRouterRule tagRouterRuleCopy = (TagRouterRule) cache.getAddrMetadata();
 
         String tag = StringUtils.isEmpty(invocation.getAttachment(TAG_KEY)) ? url.getParameter(TAG_KEY) :
             invocation.getAttachment(TAG_KEY);
@@ -116,7 +110,7 @@ public class TagDynamicStateRouter extends AbstractStateRouter implements Config
     }
 
     private boolean isForceUseTag(Invocation invocation) {
-        return Boolean.valueOf(invocation.getAttachment(FORCE_USE_TAG, url.getParameter(FORCE_USE_TAG, "false")));
+        return Boolean.parseBoolean(invocation.getAttachment(FORCE_USE_TAG, url.getParameter(FORCE_USE_TAG, "false")));
     }
 
     @Override
@@ -126,7 +120,7 @@ public class TagDynamicStateRouter extends AbstractStateRouter implements Config
 
     @Override
     public boolean isEnable() {
-        return true;
+        return tagRouterRule != null && tagRouterRule.isEnabled();
     }
 
     @Override
@@ -154,11 +148,7 @@ public class TagDynamicStateRouter extends AbstractStateRouter implements Config
 
 
         if (tagRouterRuleCopy == null || !tagRouterRuleCopy.isValid() || !tagRouterRuleCopy.isEnabled()) {
-            BitList<Invoker<T>> noTagList = new BitList<>(invokers, true);
-
-            for (int index = 0; index < invokers.size(); index++) {
-                noTagList.addIndex(index);
-            }
+            BitList<Invoker<T>> noTagList = new BitList<>(invokers, false);
             addrPool.put(NO_TAG, noTagList);
             routerCache.setAddrPool(addrPool);
             return routerCache;
@@ -218,8 +208,6 @@ public class TagDynamicStateRouter extends AbstractStateRouter implements Config
                 if ((ANYHOST_VALUE + ":" + port).equals(address)) {
                     return true;
                 }
-            } catch (UnknownHostException e) {
-                logger.error("The format of ip address is invalid in tag route. Address :" + address, e);
             } catch (Exception e) {
                 logger.error("The format of ip address is invalid in tag route. Address :" + address, e);
             }
@@ -249,7 +237,7 @@ public class TagDynamicStateRouter extends AbstractStateRouter implements Config
 
         synchronized (this) {
             if (!providerApplication.equals(application)) {
-                if (!StringUtils.isEmpty(application)) {
+                if (StringUtils.isNotEmpty(application)) {
                     ruleRepository.removeListener(application + RULE_SUFFIX, this);
                 }
                 String key = providerApplication + RULE_SUFFIX;
@@ -261,7 +249,12 @@ public class TagDynamicStateRouter extends AbstractStateRouter implements Config
                 }
             }
         }
-        pool(invokers);
     }
 
+    @Override
+    public void stop() {
+        if (StringUtils.isNotEmpty(application)) {
+            ruleRepository.removeListener(application + RULE_SUFFIX, this);
+        }
+    }
 }

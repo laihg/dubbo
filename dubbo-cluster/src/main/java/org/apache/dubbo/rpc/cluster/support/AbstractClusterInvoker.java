@@ -18,7 +18,6 @@ package org.apache.dubbo.rpc.cluster.support;
 
 import org.apache.dubbo.common.URL;
 import org.apache.dubbo.common.Version;
-import org.apache.dubbo.common.extension.ExtensionLoader;
 import org.apache.dubbo.common.logger.Logger;
 import org.apache.dubbo.common.logger.LoggerFactory;
 import org.apache.dubbo.common.utils.CollectionUtils;
@@ -32,6 +31,8 @@ import org.apache.dubbo.rpc.RpcException;
 import org.apache.dubbo.rpc.cluster.ClusterInvoker;
 import org.apache.dubbo.rpc.cluster.Directory;
 import org.apache.dubbo.rpc.cluster.LoadBalance;
+import org.apache.dubbo.rpc.model.ApplicationModel;
+import org.apache.dubbo.rpc.model.ScopeModelUtil;
 import org.apache.dubbo.rpc.support.RpcUtils;
 
 import java.util.ArrayList;
@@ -87,6 +88,7 @@ public abstract class AbstractClusterInvoker<T> implements ClusterInvoker<T> {
         return getDirectory().getConsumerUrl();
     }
 
+    @Override
     public URL getRegistryUrl() {
         return getDirectory().getUrl();
     }
@@ -100,6 +102,7 @@ public abstract class AbstractClusterInvoker<T> implements ClusterInvoker<T> {
         return getDirectory().isAvailable();
     }
 
+    @Override
     public Directory<T> getDirectory() {
         return directory;
     }
@@ -301,6 +304,22 @@ public abstract class AbstractClusterInvoker<T> implements ClusterInvoker<T> {
         return result;
     }
 
+    /**
+     * When using a thread pool to fork a child thread, ThreadLocal cannot be passed.
+     * In this scenario, please use the invokeWithContextAsync method.
+     * @return
+     */
+    protected Result invokeWithContextAsync(Invoker<T> invoker, Invocation invocation, URL consumerUrl) {
+       setContext(invoker, consumerUrl);
+        Result result;
+        try {
+            result = invoker.invoke(invocation);
+        } finally {
+            clearContext(invoker);
+        }
+       return result;
+    }
+
     protected abstract Result doInvoke(Invocation invocation, List<Invoker<T>> invokers,
                                        LoadBalance loadbalance) throws RpcException;
 
@@ -320,23 +339,27 @@ public abstract class AbstractClusterInvoker<T> implements ClusterInvoker<T> {
      * @return LoadBalance instance. if not need init, return null.
      */
     protected LoadBalance initLoadBalance(List<Invoker<T>> invokers, Invocation invocation) {
+        ApplicationModel applicationModel = ScopeModelUtil.getApplicationModel(invocation.getModuleModel());
         if (CollectionUtils.isNotEmpty(invokers)) {
-            return ExtensionLoader.getExtensionLoader(LoadBalance.class).getExtension(
+            return applicationModel.getExtensionLoader(LoadBalance.class).getExtension(
                     invokers.get(0).getUrl().getMethodParameter(
                             RpcUtils.getMethodName(invocation), LOADBALANCE_KEY, DEFAULT_LOADBALANCE
                     )
             );
         } else {
-            return ExtensionLoader.getExtensionLoader(LoadBalance.class).getExtension(DEFAULT_LOADBALANCE);
+            return applicationModel.getExtensionLoader(LoadBalance.class).getExtension(DEFAULT_LOADBALANCE);
         }
     }
 
 
     private void setContext(Invoker<T> invoker) {
+        setContext(invoker, null);
+    }
+
+    private void setContext(Invoker<T> invoker, URL consumerUrl) {
         RpcContext context = RpcContext.getServiceContext();
         context.setInvoker(invoker)
-                .setRemoteAddress(invoker.getUrl().getHost(), invoker.getUrl().getPort())
-                .setRemoteApplicationName(invoker.getUrl().getRemoteApplication());
+            .setConsumerUrl(null != consumerUrl ? consumerUrl : RpcContext.getServiceContext().getConsumerUrl());
     }
 
     private void clearContext(Invoker<T> invoker) {

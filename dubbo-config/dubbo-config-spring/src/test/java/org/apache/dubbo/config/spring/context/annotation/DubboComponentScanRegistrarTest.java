@@ -70,9 +70,8 @@ public class DubboComponentScanRegistrarTest {
         // Test @Transactional is present or not
         Assertions.assertNotNull(findAnnotation(beanClass, Transactional.class));
 
-        // reset ConfigManager of provider context
-        DubboBootstrap.reset(false);
 
+        // consumer app
         AnnotationConfigApplicationContext consumerContext = new AnnotationConfigApplicationContext();
 
         consumerContext.register(ConsumerConfiguration.class);

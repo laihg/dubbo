@@ -17,6 +17,8 @@
 
 package org.apache.dubbo.rpc.protocol.grpc;
 
+import com.google.common.util.concurrent.ListenableFuture;
+import io.grpc.stub.StreamObserver;
 import org.apache.dubbo.common.URL;
 import org.apache.dubbo.common.extension.ExtensionLoader;
 import org.apache.dubbo.common.utils.NetUtils;
@@ -24,6 +26,9 @@ import org.apache.dubbo.config.ReferenceConfigBase;
 import org.apache.dubbo.rpc.Protocol;
 import org.apache.dubbo.rpc.ProxyFactory;
 import org.apache.dubbo.rpc.model.ApplicationModel;
+import org.apache.dubbo.rpc.model.AsyncMethodInfo;
+import org.apache.dubbo.rpc.model.ConsumerModel;
+import org.apache.dubbo.rpc.model.ModuleServiceRepository;
 import org.apache.dubbo.rpc.model.ServiceDescriptor;
 import org.apache.dubbo.rpc.model.ServiceMetadata;
 import org.apache.dubbo.rpc.protocol.grpc.support.DubboGreeterGrpc;
@@ -32,6 +37,9 @@ import org.apache.dubbo.rpc.protocol.grpc.support.HelloReply;
 import org.apache.dubbo.rpc.protocol.grpc.support.HelloRequest;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+
+import java.util.HashMap;
+import java.util.Map;
 
 public class GrpcProtocolTest {
     private Protocol protocol = ExtensionLoader.getExtensionLoader(Protocol.class).getAdaptiveExtension();
@@ -45,8 +53,9 @@ public class GrpcProtocolTest {
 
         URL url = URL.valueOf("grpc://127.0.0.1:" + availablePort + "/" + DubboGreeterGrpc.IGreeter.class.getName());
 
-        ServiceDescriptor serviceDescriptor = ApplicationModel.getServiceRepository().registerService(DubboGreeterGrpc.IGreeter.class);
-        ApplicationModel.getServiceRepository().registerProvider(
+        ModuleServiceRepository serviceRepository = ApplicationModel.defaultModel().getDefaultModule().getServiceRepository();
+        ServiceDescriptor serviceDescriptor = serviceRepository.registerService(DubboGreeterGrpc.IGreeter.class);
+        serviceRepository.registerProvider(
             url.getServiceKey(),
             serviceImpl,
             serviceDescriptor,
@@ -61,22 +70,41 @@ public class GrpcProtocolTest {
         ServiceMetadata serviceMetadata = new ServiceMetadata();
         serviceMetadata.setServiceKey(URL.buildKey(DubboGreeterGrpc.IGreeter.class.getName(), null, null));
 
-        ApplicationModel.getServiceRepository().registerConsumer(
-            url.getServiceKey(),
-            serviceDescriptor,
-            mockReferenceConfig,
-            null,
-            serviceMetadata
-        );
+        Map<String, AsyncMethodInfo> methodConfigs = new HashMap<>();
+        ConsumerModel consumerModel = new ConsumerModel(serviceMetadata.getServiceKey(), null, serviceDescriptor, mockReferenceConfig,
+            serviceMetadata, methodConfigs);
 
+        ApplicationModel.defaultModel().getDefaultModule().getServiceRepository().registerConsumer(consumerModel);
+
+        url = url.setServiceModel(consumerModel);
         protocol.export(proxy.getInvoker(serviceImpl, DubboGreeterGrpc.IGreeter.class, url));
         serviceImpl = proxy.getProxy(protocol.refer(DubboGreeterGrpc.IGreeter.class, url));
 
         HelloReply hello = serviceImpl.sayHello(HelloRequest.newBuilder().setName("World").build());
         Assertions.assertEquals("Hello World", hello.getMessage());
 
+        ListenableFuture<HelloReply> future = serviceImpl.sayHelloAsync(HelloRequest.newBuilder().setName("World").build());
+        Assertions.assertEquals("Hello World", future.get().getMessage());
+
+        serviceImpl.sayHello(HelloRequest.newBuilder().setName("World").build(), new StreamObserver<HelloReply>() {
+
+            @Override
+            public void onNext(HelloReply helloReply) {
+                Assertions.assertEquals("Hello World", helloReply.getMessage());
+            }
+
+            @Override
+            public void onError(Throwable throwable) {
+                throwable.printStackTrace();
+            }
+
+            @Override
+            public void onCompleted() {
+                System.out.println("onCompleted");
+            }
+        });
         // resource recycle.
-        ApplicationModel.getServiceRepository().destroy();
+        serviceRepository.destroy();
     }
 
     class MockReferenceConfig extends ReferenceConfigBase {
@@ -86,9 +114,5 @@ public class GrpcProtocolTest {
             return null;
         }
 
-        @Override
-        public void destroy() {
-
-        }
     }
 }

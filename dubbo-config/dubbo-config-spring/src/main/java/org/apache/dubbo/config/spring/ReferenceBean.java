@@ -21,9 +21,10 @@ import org.apache.dubbo.common.utils.ClassUtils;
 import org.apache.dubbo.common.utils.StringUtils;
 import org.apache.dubbo.config.ReferenceConfig;
 import org.apache.dubbo.config.spring.context.DubboConfigBeanInitializer;
+import org.apache.dubbo.config.spring.reference.ReferenceAttributes;
 import org.apache.dubbo.config.spring.reference.ReferenceBeanManager;
 import org.apache.dubbo.config.spring.reference.ReferenceBeanSupport;
-import org.apache.dubbo.config.spring.reference.ReferenceAttributes;
+import org.apache.dubbo.config.spring.schema.DubboBeanDefinitionParser;
 import org.apache.dubbo.config.support.Parameter;
 import org.apache.dubbo.rpc.proxy.AbstractProxyFactory;
 import org.springframework.aop.framework.ProxyFactory;
@@ -94,7 +95,7 @@ import java.util.Map;
  * @see org.apache.dubbo.config.annotation.DubboReference
  * @see org.apache.dubbo.config.spring.reference.ReferenceBeanBuilder
  */
-public class ReferenceBean<T> implements FactoryBean,
+public class ReferenceBean<T> implements FactoryBean<T>,
         ApplicationContextAware, BeanClassLoaderAware, BeanNameAware, InitializingBean, DisposableBean {
 
     private transient ApplicationContext applicationContext;
@@ -158,9 +159,15 @@ public class ReferenceBean<T> implements FactoryBean,
 
     /**
      * Create bean instance.
+     *
+     * <p></p>
+     * Why we need a lazy proxy?
+     *
      * <p/>
      * When Spring searches beans by type, if Spring cannot determine the type of a factory bean, it may try to initialize it.
      * The ReferenceBean is also a FactoryBean.
+     * <br/>
+     * (This has already been resolved by decorating the BeanDefinition: {@link DubboBeanDefinitionParser#configReferenceBean})
      *
      * <p/>
      * In addition, if some ReferenceBeans are dependent on beans that are initialized very early,
@@ -172,20 +179,17 @@ public class ReferenceBean<T> implements FactoryBean,
      * <br/>
      * In this way, the influence of Spring is eliminated, and the dubbo configuration initialization is controllable.
      *
-     * <p/>
-     * Dubbo config beans are initialized in DubboConfigBeanInitializer.
-     * <br/>
-     * The actual references will be processing in DubboBootstrap.referServices().
      *
      * @see DubboConfigBeanInitializer
-     * @see org.apache.dubbo.config.bootstrap.DubboBootstrap
+     * @see ReferenceBeanManager#initReferenceBean(ReferenceBean)
+     * @see DubboBeanDefinitionParser#configReferenceBean
      */
     @Override
-    public Object getObject() {
+    public T getObject() {
         if (lazyProxy == null) {
             createLazyProxy();
         }
-        return lazyProxy;
+        return (T) lazyProxy;
     }
 
     @Override

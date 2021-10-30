@@ -17,10 +17,13 @@
 package org.apache.dubbo.config.spring.propertyconfigurer.consumer3;
 
 import org.apache.dubbo.config.bootstrap.DubboBootstrap;
-import org.apache.dubbo.config.spring.ZooKeeperServer;
 import org.apache.dubbo.config.spring.api.HelloService;
 import org.apache.dubbo.config.spring.context.annotation.EnableDubbo;
 import org.apache.dubbo.config.spring.propertyconfigurer.consumer.DemoBeanFactoryPostProcessor;
+import org.apache.dubbo.config.spring.registrycenter.RegistryCenter;
+import org.apache.dubbo.config.spring.registrycenter.ZookeeperSingleRegistryCenter;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,15 +38,34 @@ import org.springframework.context.support.ClassPathXmlApplicationContext;
 import org.springframework.context.support.PropertySourcesPlaceholderConfigurer;
 import org.springframework.core.io.ClassPathResource;
 
+import java.io.IOException;
+
 public class PropertySourcesInJavaConfigTest {
 
     private static final String SCAN_PACKAGE_NAME = "org.apache.dubbo.config.spring.propertyconfigurer.consumer3.notexist";
     private static final String PACKAGE_PATH = "/org/apache/dubbo/config/spring/propertyconfigurer/consumer3";
     private static final String PROVIDER_CONFIG_PATH = "org/apache/dubbo/config/spring/propertyconfigurer/provider/dubbo-provider.xml";
+    private static RegistryCenter singleRegistryCenter;
 
     @BeforeAll
-    public static void setUp() {
-        ZooKeeperServer.start();
+    public static void beforeAll() {
+        singleRegistryCenter = new ZookeeperSingleRegistryCenter();
+        singleRegistryCenter.startup();
+    }
+
+    @AfterAll
+    public static void afterAll() {
+        singleRegistryCenter.shutdown();
+    }
+
+    @BeforeEach
+    public void setUp() throws Exception {
+        DubboBootstrap.reset();
+    }
+
+    @AfterEach
+    public void tearDown() throws IOException {
+        DubboBootstrap.reset();
     }
 
     @BeforeEach
@@ -57,14 +79,6 @@ public class PropertySourcesInJavaConfigTest {
         ClassPathXmlApplicationContext providerContext = new ClassPathXmlApplicationContext(PROVIDER_CONFIG_PATH);
         try {
             providerContext.start();
-
-            try {
-                Thread.sleep(1000);
-            } catch (InterruptedException e) {
-            }
-
-            // reset config
-            DubboBootstrap.reset(false);
 
             // Resolve placeholder by import property sources
             AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext(ConsumerConfiguration.class, ImportPropertyConfiguration.class);
@@ -93,14 +107,6 @@ public class PropertySourcesInJavaConfigTest {
         ClassPathXmlApplicationContext providerContext = new ClassPathXmlApplicationContext(PROVIDER_CONFIG_PATH);
         try {
             providerContext.start();
-
-            try {
-                Thread.sleep(1000);
-            } catch (InterruptedException e) {
-            }
-
-            // reset config
-            DubboBootstrap.reset(false);
 
             // Resolve placeholder by custom PropertySourcesPlaceholderConfigurer bean
             AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext(ConsumerConfiguration.class, PropertyBeanConfiguration.class);

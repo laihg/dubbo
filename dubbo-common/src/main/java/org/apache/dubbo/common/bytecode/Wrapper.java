@@ -21,6 +21,7 @@ import org.apache.dubbo.common.utils.ReflectUtils;
 
 import javassist.ClassPool;
 import javassist.CtMethod;
+import javassist.LoaderClassPath;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
@@ -146,17 +147,18 @@ public abstract class Wrapper {
         for (Field f : c.getFields()) {
             String fn = f.getName();
             Class<?> ft = f.getType();
-            if (Modifier.isStatic(f.getModifiers()) || Modifier.isTransient(f.getModifiers())) {
+            if (Modifier.isStatic(f.getModifiers()) || Modifier.isTransient(f.getModifiers()) || Modifier.isFinal(f.getModifiers())) {
                 continue;
             }
 
-            c1.append(" if( $2.equals(\"").append(fn).append("\") ){ w.").append(fn).append('=').append(arg(ft, "$3")).append("; return; }");
-            c2.append(" if( $2.equals(\"").append(fn).append("\") ){ return ($w)w.").append(fn).append("; }");
+            c1.append(" if( $2.equals(\"").append(fn).append("\") ){ ((" + f.getDeclaringClass().getName() + ")w).").append(fn).append('=').append(arg(ft, "$3")).append("; return; }");
+            c2.append(" if( $2.equals(\"").append(fn).append("\") ){ return ($w)((" + f.getDeclaringClass().getName() + ")w).").append(fn).append("; }");
             pts.put(fn, ft);
         }
 
         final ClassPool classPool = new ClassPool(ClassPool.getDefault());
-        classPool.appendClassPath(new CustomizedLoaderClassPath(cl));
+        classPool.insertClassPath(new LoaderClassPath(cl));
+        classPool.insertClassPath(new LoaderClassPath(ClassGenerator.class.getClassLoader()));
 
         List<String> allMethod = new ArrayList<>();
         try {

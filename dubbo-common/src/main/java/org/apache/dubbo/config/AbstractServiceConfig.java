@@ -34,7 +34,7 @@ import static org.apache.dubbo.common.constants.CommonConstants.SERVICE_FILTER_K
  */
 public abstract class AbstractServiceConfig extends AbstractInterfaceConfig {
 
-    private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = -9026290350363878309L;
 
     /**
      * The service version
@@ -120,7 +120,10 @@ public abstract class AbstractServiceConfig extends AbstractInterfaceConfig {
 
     /**
      * Weather the service is export asynchronously
+     * @deprecated
+     * @see ModuleConfig#exportAsync
      */
+    @Deprecated
     private Boolean exportAsync;
 
     @Override
@@ -134,18 +137,22 @@ public abstract class AbstractServiceConfig extends AbstractInterfaceConfig {
         }
     }
 
+    @Override
     public String getVersion() {
         return version;
     }
 
+    @Override
     public void setVersion(String version) {
         this.version = version;
     }
 
+    @Override
     public String getGroup() {
         return group;
     }
 
+    @Override
     public void setGroup(String group) {
         this.group = group;
     }
@@ -306,11 +313,13 @@ public abstract class AbstractServiceConfig extends AbstractInterfaceConfig {
         this.serialization = serialization;
     }
 
+    @Deprecated
     @Parameter(key = EXPORT_ASYNC_KEY)
     public Boolean getExportAsync() {
         return exportAsync;
     }
 
+    @Deprecated
     public void setExportAsync(Boolean exportAsync) {
         this.exportAsync = exportAsync;
     }
